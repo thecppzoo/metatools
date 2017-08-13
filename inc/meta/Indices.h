@@ -14,6 +14,6 @@ struct Indices_impl<0, indices...> {
     using type = IndexPack<unsigned long, 0, indices...>;
 };
 
-template<unsigned long count> using Indices = typename Indices_impl<unsigned long, count>::type;
+template<unsigned long count> using Indices = typename Indices_impl<count>::type;
 
 }
