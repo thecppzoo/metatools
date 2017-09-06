@@ -1,6 +1,8 @@
 #pragma once
 
+#ifndef NO_STANDARD_INCLUDES
 #include <type_traits>
+#endif
 
 namespace meta {
 

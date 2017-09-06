@@ -1,7 +1,9 @@
 #pragma once
 
+#ifndef NO_STANDARD_INCLUDES
 #include <type_traits>
 #include <utility>
+#endif
 
 namespace meta {
     template<typename T>
