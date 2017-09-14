@@ -1,8 +1,10 @@
 # Converting runtime values to compile time values, "meta-switch"
 
+## This document explains the work done in [`Instantiator.h`](https://github.com/thecppzoo/metatools/blob/master/inc/meta/Instantiator.h)
+
 There are many use cases of decoding data from an input stream, where one gets a type switch field, something like the message type id in market data messages, or the opcode in a processor emulator.  Using that type switch, it is possible to jump into the appropriate function that will take care of the data.
 
-Whenever implementing these things manually, one uses the core language feature of a `switch`.  The explanations will use the following example:
+Whenever implementing these things manually, one uses the core language feature of a `switch`.  The explanations will use the following example, inspired by the processing of financial market data, a subject matter I presented at [CPPCon last year](https://www.youtube.com/watch?v=z6fo90R8q5U), [code](https://github.com/thecppzoo/cppcon2016)
 
 ```c++
 switch(messageId) {
@@ -12,7 +14,7 @@ switch(messageId) {
 }
 ```
 
-However, this looks wasteful in terms of programmer effort: the binding between INCREMENTAL and processIncremental should already be explicit, the programmer should not have to repeat themselves by writing the switch and the cases.  As I always criticize whenever the language incentivizes copying & pasting, this is dangerous, for example, the message set can change and then every single one of the switches needs updating.  There are other problems of copying and pasting that apply here, but I don't want to repat here the reasons why copying & pasting is so bad.
+However, this looks wasteful in terms of programmer effort: the binding between `INCREMENTAL` and `processIncremental` should already be explicit, the programmer should not have to repeat themselves by writing the switch and the cases.  As I always criticize whenever the language incentivizes copying & pasting, this is dangerous, for example, the set of message types can change and then every single one of the switches needs updating.  There are other problems of copying and pasting that apply here, but I don't want to repat here the reasons why copying & pasting is so bad.
 
 Since the binding between `INCREMENTAL` and `processIncremental` can be made explicit in many different ways, how are we going to program that whenever the `messageId` is `INCREMENTAL` then `processIncremental` should be called?
 
@@ -66,7 +68,7 @@ void invokes(std::size_t messageId, void *messageData) {
 
 Generalizing, and taking into account all the `constexpr`, `static`, template templates, etc., we arrive at something like this:
 
-```
+```c++
 #include <utility>
 #include <array>
 
@@ -148,7 +150,7 @@ void process(const void *data, int id) {
 }
 ```
 
-The [compiler explorer] shows that the function `process` is implemented as simply jumping into a table using `id` as the index.  This is equivalent to how non trivial `switch` are treated.
+The [compiler explorer](https://gcc.godbolt.org/#z:OYLghAFBqd5QCxAYwPYBMCmBRdBLAF1QCcAaPECAKxAEZSBnVAV2OUxAHIBSAJgGY8AO2QAbZlgDU3fgGFmBPKMIBPGdm4AGAIJ9BI8VJmyAhsWIm1/DTq3ahJgLaYGABxPtJzgiekB2ACE7OwJMR1dRE1DjO0k4yVDwyOi5BgJ0EBAGPAAvTAB9AnVJMRMGBkkAVQZMYgAVMIiozFJJNIys3IKCSQBlLtaCFVdMB2cAOknJbWJgBmDrOzTiZmQegEkhNJMhRSiSfyCdeMlmbKFgSWJMAlYhQul%2BABFJLDEhkYhq2oak5uNNOpMpgAB6YZAKTAQdqZN6iABuJlExhmc3UEAAlJNxhiMTIjtoTmdhJdssAHLdrg8ZC9rpT7j0IAAqDEQVEMbF4/gE2LxbaKZBXG53B6g8GQtmzDlTMzAZjOXYMVowzp5B7CLAgjGHXknOJoLahEGuYhtHwCyQmBSoBImABGokwjyeur1J0cJgA1phTKJRHV7Y7oelMh7vfkNaD8jUAI7MUbsYz9PLo3H410nOl3W0OzDcACsAUjIILT2DHQAZiQAO5mdAoqXo2Xy0YEBhYyZcgknbh%2BF22HQmvCI0IgV2JJopWQq7JqgjYySbfDseaLY7xA1pUEms1RPCClVmCxWad4clRVjdVrJvNrwnxMM%2BpH%2BwNQlXF6OYOMJ2%2ByJf7lxsXUbVe27N0hXpQ4qhqepGmSX9/xXIEQDFCFQgXXsXW5V1MOCPt0wHXR8MI0Z5UkABZFwGBMYBMDqYYODNDpZ26HV1zidYADlZAAJWwcjsE4uptAAGWdSR%2BFIV06h47QnmwcT8yk9jF04gA1UT1n7IisJ5HQJ3g4wZy6Qp1CWAgVjWCiqJop1QNw7DCOJC5FxEa4FR8URxMo8pbOMLjeP4wThJEszHO0ZzLjqCwjGeazfNo4wZLkjRFnCux4VQPB0EkE1UBXBhNmQdzWyRCBNw2NywlKry%2BAANi7DKspyvKCuikwsHK1BDUkdqjF4BqCN0fS4P%2BOQzJ0ZZVh6HzqMSuQAr4gShNE4p7JU/l90kTLsty4h8qorqeqKkrdiRaQBvQKITBAwI9oO8oTuqs7RAgK6fC7fxtIcvTtAMsbZAm7Qpqs2a/LkZL5LWwJXU2wUdpa/aCqOtJepiuzLuu26Anutr0berH8S%2BvDdOCEa/inYy5woupBgYsY7LihGgZBmabNogAFJGqJICMkjY%2B84jh7bmskVCJQqkXdqZd6bp1YidKGkJRqnD5RicTAgOsU5zkuBHqSZ5qlfJydfyp1jyLqFmLOm%2BK5swLmHqYYg%2BYiYxLdafWijkOE1YgMH5tkS3kNaqiuVShT1sF3cLQRsWwTQqFJbjmWsYF8C7fBoOresTJQ/KZlrmEUJiBNG58mQMpvdkSWA9/YPtaZdFZbTcKewVn6yb%2BlWzZDVULZzmxgZt0H2Yd7nyhIEBM85ifndd5E5AbyOYfw9KdDj/OGBRnoU9l1pi8kbLsddbwTEyTZtl2PB9mIGIVJOOvHYKkhWi4jSRK01pk9FpuVOQ8WoQCY%2BAPugRqtg%2BycAxKQUQXB8ycFIEILgmgEGoC4IDXgQRMFtBYGwDG/BaAIIIMgqBpAIBIBYAQVwChyCUDQOEJQtQ6CkEwPgIgxA6DQNgZweBiCSGkDQTwAQtBJDVkIAgSQIIAAcdUAC0dUAAsJRIguXzOMTQ6iiEkNxKQT0IB8xSPGAATk0EY/gfg/AEKMTIhR%2BZJLcIUQgpBnAUECK4AghgIBNCkGIS40hcBYBIHoa4RhZAKBdQYY6DhpQLj5k0N4isSgS6eIgHafh9CPIAHkhCiBUPw/A1w1jDhcPw4umBuGuIsngRw2iBGuEUN1TxnBJCyMybwFp7QaTID4FggItAlGyIAOrPg8bg9gzDay7EyfUzYVYuCEK4XApx/DBHSLkYo5ROxLhqI0ZoSQEBcCEAOHoegkhZCoEibUC6BCMRaL8TovRCjaDqJMXVXgA0pGaFoPwfMCijEwK4I4vhfi3GcA8V4nx2jFmcF4MskFgi7koJ0fCWo2RuogAUUAA%3D) shows that the function `process` is implemented as simply jumping into a table using `id` as the index.  This is equivalent to how non trivial `switch` are treated.
 
 I would say the only specific work needed for using `Instantiator` is the adaptor, which in this example, takes care of "doing nothing" if the specialization of `Message` does not have a `process` member, 11 lines of as straightforward code as it gets in metaprogramming.
 
