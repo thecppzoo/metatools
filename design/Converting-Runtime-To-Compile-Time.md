@@ -66,9 +66,11 @@ void invokes(std::size_t messageId, void *messageData) {
 
 Generalizing, and taking into account all the `constexpr`, `static`, template templates, etc., we arrive at something like this:
 
-```c++
+```
 #include <utility>
 #include <array>
+
+namespace meta {
 
 template<
     template<std::size_t> class UserTemplate, std::size_t Size, typename... Args
@@ -90,6 +92,63 @@ private:
         return { UserTemplate<Indices>::execute... };
     }
 };
+
+}
 ```
 
-Which is implemented in this repository as `Instantiator`.
+Now, consider this skeleton example:
+
+```c++
+enum MessageType: std::size_t {
+    INCREMENTAL = 3,
+    TRADE = 5,
+    INVALID
+};
+
+template<std::size_t>
+struct Message {};
+
+using Incremental = Message<INCREMENTAL>;
+using Trade = Message<TRADE>;
+
+void processIncremental(const Incremental &);
+void processTrade(const Trade &);
+
+template<>
+struct Message<INCREMENTAL> {
+    static void process(const Incremental &data) { processIncremental(data); }
+};
+
+template<>
+struct Message<TRADE> {
+    static void process(const Trade &data) { processTrade(data); }
+};
+
+template<std::size_t MT, typename = void>
+struct MessageProcessor_impl {
+    static void execute(const void *data) {}
+};
+
+template<typename...> using void_t = void;
+
+template<std::size_t MT>
+struct MessageProcessor_impl<MT, void_t<decltype(Message<MT>::process)>> {
+    static void execute(const void *data) {
+        Message<MT>::process(*reinterpret_cast<const Message<MT> *>(data));
+    }
+};
+
+template<std::size_t MT>
+struct MessageProcessor: MessageProcessor_impl<MT> {};
+
+void process(const void *data, int id) {
+    meta::Instantiator<
+        MessageProcessor, INVALID, const void *
+    >::execute(data, id);
+}
+```
+
+The [compiler explorer] shows that the function `process` is implemented as simply jumping into a table using `id` as the index.  This is equivalent to how non trivial `switch` are treated.
+
+I would say the only specific work needed for using `Instantiator` is the adaptor, which in this example, takes care of "doing nothing" if the specialization of `Message` does not have a `process` member, 11 lines of as straightforward code as it gets in metaprogramming.
+
