@@ -1,6 +1,8 @@
 #include <utility>
 #include <array>
 
+namespace meta {
+
 template<
     template<std::size_t> class UserTemplate, std::size_t Size, typename... Args
 >
@@ -21,3 +23,5 @@ private:
         return { UserTemplate<Indices>::execute... };
     }
 };
+
+}
