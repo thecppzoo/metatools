@@ -98,6 +98,12 @@ private:
 }
 ```
 
+## Discriminating unions, `std::variant`
+
+This soluiton I think is applicable to use cases regarding discriminating unions (that have a runtime type switch field) and also to compile-time switching as in some `std::variant` visitor patterns.
+
+## Example
+
 Now, consider this skeleton example:
 
 ```c++
