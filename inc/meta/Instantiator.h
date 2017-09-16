@@ -4,22 +4,32 @@
 namespace meta {
 
 template<
-    template<std::size_t> class UserTemplate, std::size_t Size, typename... Args
+    template<std::size_t> class UserTemplate,
+    std::size_t Size,
+    typename FunctionSignature
 >
-struct Instantiator {
-    using return_t = decltype(UserTemplate<0>::execute(std::declval<Args>()...));
+struct Instantiator;
+
+template<
+    template<std::size_t> class UserTemplate,
+    std::size_t Size,
+    typename Return,
+    typename... Args
+>
+struct Instantiator<UserTemplate, Size, Return(Args...)> {
+    using return_t = Return;
     using signature_t = return_t (*)(Args...);
 
     static return_t execute(Args... arguments, std::size_t index) {
-        constexpr static auto table =
-            makeCallTable(std::make_index_sequence<Size>());
-        return table[index](std::forward<Args>(arguments)...);
+        constexpr static auto jumpTable =
+            makeJumpTable(std::make_index_sequence<Size>());
+        return jumpTable[index](std::forward<Args>(arguments)...);
     }
 
 private:
     template<std::size_t... Indices>
     constexpr static std::array<signature_t, Size>
-    makeCallTable(std::index_sequence<Indices...>) {
+    makeJumpTable(std::index_sequence<Indices...>) {
         return { UserTemplate<Indices>::execute... };
     }
 };
