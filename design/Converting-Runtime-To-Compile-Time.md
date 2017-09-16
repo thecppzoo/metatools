@@ -2,6 +2,16 @@
 
 ## This document explains the work done in [`Instantiator.h`](https://github.com/thecppzoo/metatools/blob/master/inc/meta/Instantiator.h)
 
+## TL;DR
+
+This component allows converting a runtime integral value into jumping to a function template on the given runtime value as template parameter, that is, converts a runtime integral value into a compile-time one with maximal performance.
+
+## Suggested extensions
+
+The component shown here can be adapted trivially for the case the set of integers is not a zero-based consecutive one by using a hash function, the user should be able to provide a hash function superior to any default in infrastructure, including a function implemented with a runtime `switch`!  Current work is being made to simplify the specification of what to do with "holes" in the sequence of integers.   We believe that converting a runtime integral to the execution of a template function whose parameter is the given runtime integral is sufficiently general for the conversion of runtime to compile time needs.
+
+## Motivation
+
 There are many use cases of decoding data from an input stream, where one gets a type switch field, something like the message type id in market data messages, or the opcode in a processor emulator.  Using that type switch, it is possible to jump into the appropriate function that will take care of the data.
 
 Whenever implementing these things manually, one uses the core language feature of a `switch`.  The explanations will use the following example, inspired by the processing of financial market data, a subject matter I presented at [CPPCon last year](https://www.youtube.com/watch?v=z6fo90R8q5U), [code](https://github.com/thecppzoo/cppcon2016)
@@ -65,6 +75,8 @@ void invokes(std::size_t messageId, void *messageData) {
     table[messageId](messageData);
 }
 ```
+
+## Instantiator
 
 Generalizing, and taking into account all the `constexpr`, `static`, template templates, etc., we arrive at something like this:
 
@@ -159,14 +171,14 @@ struct MessageProcessor_impl<MT, void_t<decltype(Message<MT>::process)>> {
 template<std::size_t MT>
 struct MessageProcessor: MessageProcessor_impl<MT> {};
 
-void process(const void *data, int id) {
+void process(const void *data, std::size_t id) {
     meta::Instantiator<
-        MessageProcessor, INVALID, const void *
+        MessageProcessor, INVALID, void(const void *)
     >::execute(data, id);
 }
 ```
 
-The [compiler explorer](https://gcc.godbolt.org/#z:OYLghAFBqd5QCxAYwPYBMCmBRdBLAF1QCcAaPECAKxAEZSBnVAV2OUxAHIBSAJgGY8AO2QAbZlgDU3fgGFmBPKMIBPGdm4AGAIJ9BI8VJmyAhsWIm1/DTq3ahJgLaYGABxPtJzgiekB2ACE7OwJMR1dRE1DjO0k4yVDwyOi5BgJ0EBAGPAAvTAB9AnVJMRMGBkkAVQZMYgAVMIiozFJJNIys3IKCSQBlLtaCFVdMB2cAOknJbWJgBmDrOzTiZmQegEkhNJMhRSiSfyCdeMlmbKFgSWJMAlYhQul%2BABFJLDEhkYhq2oak5uNNOpMpgAB6YZAKTAQdqZN6iABuJlExhmc3UEAAlJNxhiMTIjtoTmdhJdssAHLdrg8ZC9rpT7j0IAAqDEQVEMbF4/gE2LxbaKZBXG53B6g8GQtmzDlTMzAZjOXYMVowzp5B7CLAgjGHXknOJoLahEGuYhtHwCyQmBSoBImABGokwjyeur1J0cJgA1phTKJRHV7Y7oelMh7vfkNaD8jUAI7MUbsYz9PLo3H410nOl3W0OzDcACsAUjIILT2DHQAZiQAO5mdAoqXo2Xy0YEBhYyZcgknbh%2BF22HQmvCI0IgV2JJopWQq7JqgjYySbfDseaLY7xA1pUEms1RPCClVmCxWad4clRVjdVrJvNrwnxMM%2BpH%2BwNQlXF6OYOMJ2%2ByJf7lxsXUbVe27N0hXpQ4qhqepGmSX9/xXIEQDFCFQgXXsXW5V1MOCPt0wHXR8MI0Z5UkABZFwGBMYBMDqYYODNDpZ26HV1zidYADlZAAJWwcjsE4uptAAGWdSR%2BFIV06h47QnmwcT8yk9jF04gA1UT1n7IisJ5HQJ3g4wZy6Qp1CWAgVjWCiqJop1QNw7DCOJC5FxEa4FR8URxMo8pbOMLjeP4wThJEszHO0ZzLjqCwjGeazfNo4wZLkjRFnCux4VQPB0EkE1UBXBhNmQdzWyRCBNw2NywlKry%2BAANi7DKspyvKCuikwsHK1BDUkdqjF4BqCN0fS4P%2BOQzJ0ZZVh6HzqMSuQAr4gShNE4p7JU/l90kTLsty4h8qorqeqKkrdiRaQBvQKITBAwI9oO8oTuqs7RAgK6fC7fxtIcvTtAMsbZAm7Qpqs2a/LkZL5LWwJXU2wUdpa/aCqOtJepiuzLuu26Anutr0berH8S%2BvDdOCEa/inYy5woupBgYsY7LihGgZBmabNogAFJGqJICMkjY%2B84jh7bmskVCJQqkXdqZd6bp1YidKGkJRqnD5RicTAgOsU5zkuBHqSZ5qlfJydfyp1jyLqFmLOm%2BK5swLmHqYYg%2BYiYxLdafWijkOE1YgMH5tkS3kNaqiuVShT1sF3cLQRsWwTQqFJbjmWsYF8C7fBoOresTJQ/KZlrmEUJiBNG58mQMpvdkSWA9/YPtaZdFZbTcKewVn6yb%2BlWzZDVULZzmxgZt0H2Yd7nyhIEBM85ifndd5E5AbyOYfw9KdDj/OGBRnoU9l1pi8kbLsddbwTEyTZtl2PB9mIGIVJOOvHYKkhWi4jSRK01pk9FpuVOQ8WoQCY%2BAPugRqtg%2BycAxKQUQXB8ycFIEILgmgEGoC4IDXgQRMFtBYGwDG/BaAIIIMgqBpAIBIBYAQVwChyCUDQOEJQtQ6CkEwPgIgxA6DQNgZweBiCSGkDQTwAQtBJDVkIAgSQIIAAcdUAC0dUAAsJRIguXzOMTQ6iiEkNxKQT0IB8xSPGAATk0EY/gfg/AEKMTIhR%2BZJLcIUQgpBnAUECK4AghgIBNCkGIS40hcBYBIHoa4RhZAKBdQYY6DhpQLj5k0N4isSgS6eIgHafh9CPIAHkhCiBUPw/A1w1jDhcPw4umBuGuIsngRw2iBGuEUN1TxnBJCyMybwFp7QaTID4FggItAlGyIAOrPg8bg9gzDay7EyfUzYVYuCEK4XApx/DBHSLkYo5ROxLhqI0ZoSQEBcCEAOHoegkhZCoEibUC6BCMRaL8TovRCjaDqJMXVXgA0pGaFoPwfMCijEwK4I4vhfi3GcA8V4nx2jFmcF4MskFgi7koJ0fCWo2RuogAUUAA%3D) shows that the function `process` is implemented as simply jumping into a table using `id` as the index.  This is equivalent to how non trivial `switch` are treated.
+The [compiler explorer](https://gcc.godbolt.org/#z:OYLghAFBqd5QCxAYwPYBMCmBRdBLAF1QCcAaPECAKxAEZSBnVAV2OUxAHIBSAJgGY8AO2QAbZlgDU3fgGFmBPKMIBPGdm4AGAIJ9BI8VJmyAhsWIm1/DTq3ahJgLaYGABxPtJzgiekB2ACE7OwJMR1dRE1DjO0k4yVDwyOi5BgJ0EBAGPAAvTAB9AnVJMRMGBkkAVQZMYgAVMIiozFJY%2BLSMrNyCgkkAZW7WnXiElVdMB2dJADFmEUVUIQHgBwJWTGDrOzTiZmRegEkhNJMhRSiSGSDbHUSmlNk2uLvkjdT0zOy8wuLS8qqavVGq8htoRh1Pt1Cv1Bk9RuNJphJAAlTBrYhCUEjAhjCZOTAAOiJkm0xGADE2Nm0Oz2h2OPjOeAuxGM1VqDSSzVIMLy3NR6KEEFJ5KJBIAlMVuIE4cxskJgJJiGjWEJoTIACIo5UYq4yuUK7IrKLrNX8TVKgXQiAAKjFQrJDFFEv4110w3aPkUyEV2tVvUwAA9MMgFJh7SLiWZgMxnGcGNyIV1vr1hFgA2L/K6RiM0PTA65iJITl7JCYFKhJFQY646iYAEaiJEauHZ%2BKOEwAa0wAClq7WG2HE%2B2u/lU4H8jUAI7MCbsYwDPLqCBi51Z1s%2BgWVvv1xvcACsATHAf36ogiYAZiQAO5mdDGYUU6wQKMxiYEBhip2691xKXq4I6AWeAAG7NCAcIvM0xiJl8PSipIRz4Owj5UjmixpPmhbFng3qJmYFhWLIhqrCaBDcgubyoW2nY9tuA5nh8IBHhOmDTrObyyIhOEuKK6gZlKa6thaKqZgC7LAlBchcch6iZIGwahvBf7fmC8TKbYfj/i6AG6JpOkTDGkgALIuAwJjAJgdS4iARaMbBarSj%2BCEAHKyMi2BGdgzl1NoAAy0hmpI/BYvEdTIto6rYAFmp7iFcQHM5ABqfkHP%2BGlaa6IQSQ8MFQkUWw6DS%2BzGaZ5lNo5qlxAA9FV2HesBqB4OgkgFqgyEMBAuZpCV5RldIvAAGyrsEenaTc2iysICpHMgSqxj4ojRT1ZkWcYCVuR5Xk%2Bb56gqZN8qSHUFhGIFJm9atchhRFGhbGNbraA1TUtcQbWmTNc1viYoidehdKzWEn2LXwQ0qY9zWte1R0mFgP30odx1NoNw3jZBDy7YVBC7MVZ0rRx63uZ53l%2BZKFXgp6OGSGDz2veUsPde9ANnF9/UDegUQmPxgTU%2B1DPzV9EBsz4q7%2BGlukZTpqMcej1KY7Sy1lcYV2RSTgm2VEFNUxDpl070UNGINgsc6JWvlHrYaG8L6liypWWcjldl5cZdTcjiCL4ktYPS0VvQ42VAAKL3tSQo5JJmcJ1ZTjXNfJIahDrkdPdaFth3p6U27c2Uca7eLOLx1iSPtCpg6amqe3dtv3BxuXJk7Xuy9jpUWQHNNMMQIcRMYRnOwn6A/HIWBiNnEC%2Bxdshd7JIAmx%2Bu35wJ4fk/VUeSDHobx1TSfs5zqsjCPHHj9YmRTzaSrCKExAFmi%2BTIGU%2BWyF1PuN3vdTFNaS4W8jlUiyN4so5n0EOzXfeVJvbyyboHUyJAbK72bkHNueAkid2frPaUo1Mo6E1uA2m98e6SA3j4BMACeiSCalvOE3gTCZCOCcRkzIYhOR3o/GBECyAuWSr5VK3IwZryXraOEE8V5x0NtyEhNtNKcDFKQUQXA9ycFIEILgmhZGoC4I8XgQQ1FFhYGwRG/BaCyIIAo8RpAIBIBYAQVwChyCUDQOEJQtQ6CkEwPgIgxA6ASKkZwGRcjDGkGUTwAQtBJBXkIAgSQAYAAcA0AC0A0AAsJRIgHT3ASTQKT9GGJXKQDsIA9z8AJLQPctBaCaE0AATnCX4MptBwnhMkVwWJsj5GcEUb4rgsiGAgE0KQAxzSjFwFgEgGxrg7FkAoD9WxjZXGlHlHuEppBzxKDPh0iA%2BRVmaEoBIusPibHzQAPJCFECoHx%2BAlT7BAi4Hxp9MAeJaVQNixAjmcDybwfJsjGzygIEgegF9gK7LrFQYMBiVlrI2ZIiYwBPkOJ%2BX8gF%2BxKCrPyOs6gABFGcDz%2BC8GKXuUpmhYmVLKbEzF4TSmzKKZQfAbhIiPPEe48FkLaCZMxvAjJvjXALGOFwSQUTdm8C5R0DUyA%2BDqICLQeJUSADqX1RDtK0ewBxN4zi7LZUcS8XA9HuOkY0nxfiInRLiQk04CpkmpM0JICAuBCAkH6ro7kshUATNqNahl6TemZOybEgaBJwmxJqaUnFtBeA4vCbQfgsS6mcAad43prTODtM6d0jJGrOC8C1dGvxLrFGZOArUbIiwQCxKAA%3D%3D%3D) shows that the function `process` is implemented as simply jumping into a table using `id` as the index.  This is equivalent to how non trivial `switch` are treated.
 
 I would say the only specific work needed for using `Instantiator` is the adaptor, which in this example, takes care of "doing nothing" if the specialization of `Message` does not have a `process` member, 11 lines of as straightforward code as it gets in metaprogramming.
 
@@ -174,7 +186,7 @@ I would say the only specific work needed for using `Instantiator` is the adapto
 
 One example of the emerging superiority of Clang over GCC may be that it is possible to implement this meta-switch using the `switch` feature, more precisely, nesting-switch instead of an array of callables, and the Clang compiler will convert the nesting-switches into a jump table.
 
-For example:
+The following implements such feature:
 
 ```c++
 #include <utility>
@@ -221,7 +233,7 @@ private:
 }
 ```
 
-With almost the same example as above, but using `SwitchInstantiator` instead and providing a default implementation for `Message<X>::process`:
+With almost the same example as above, but using `SwitchInstantiator` instead and providing a default implementation for `Message<X>::process` because otherwise the compiler will generate only two cases because the didactic example only has two message types with `process` defined:
 
 ```c++
 enum MessageType: std::size_t {
@@ -306,5 +318,8 @@ process(void const*, int):
   jmp Message<4ul>::process(Message<4ul> const&)
 .L26:
   jmp processTrade(Message<5ul> const&)
-  ```
-  
+```
+
+We must conclude that currently only Clang can translate the nested-switch option to implement the compile time jump table into a jump table, and not as inexpensive as the array-of-functions of `Instantiator`.
+
+It seems the [library Petra](https://github.com/jacquelinekay/petra) which also allows a component for building jump tables at compilation time, unfortunately [uses the nested switch](https://github.com/jacquelinekay/petra/blob/eeab467239c95544ae1576bfe1fbb91a10db1ae0/include/petra/switch_table.hpp#L19) implementation choice.
