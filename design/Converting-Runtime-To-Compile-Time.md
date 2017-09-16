@@ -322,4 +322,81 @@ process(void const*, int):
 
 We must conclude that currently only Clang can translate the nested-switch option to implement the compile time jump table into a jump table, and not as inexpensive as the array-of-functions of `Instantiator`.
 
-It seems the [library Petra](https://github.com/jacquelinekay/petra) which also allows a component for building jump tables at compilation time, unfortunately [uses the nested switch](https://github.com/jacquelinekay/petra/blob/eeab467239c95544ae1576bfe1fbb91a10db1ae0/include/petra/switch_table.hpp#L19) implementation choice.
+## But this is not the end of the story, nested switchs in Clang have one advantage
+
+However, this is not end of the story.  Neither GCC nor Clang are able to use the execution context information at the point of inlining the funcitons of the jump table.  For example, imagine that the process functions have a "channel" argument, and the entry point for processing hardcodes that "channel" to some number, let's say 7.  Let us say that the `processIncremental` does not like any channel except number 1.  In the jump table, this fact, that the channel will be 7, won't be used.  But in the case of nested switches, **in Clang**, it will be used.  That's why for this:
+
+```c++
+enum MessageType: std::size_t {
+    INCREMENTAL = 3,
+    TRADE = 5,
+    INVALID
+};
+
+template<std::size_t>
+struct Message {
+    //static void process(const Message &);
+};
+
+using Incremental = Message<INCREMENTAL>;
+using Trade = Message<TRADE>;
+
+void processIncremental(long, bool, long);
+void processTrade(const Trade &);
+
+struct Common {
+    MessageType m_type;
+    long m_instrumentId;
+};
+
+template<>
+struct Message<INCREMENTAL>: Common {
+    bool m_isBid;
+    long m_price;
+    static void process(const Incremental &data, int channel) { if(1 == channel) { data.lProcess(); } }
+    void lProcess() const { processIncremental(m_instrumentId, m_isBid, m_price); }
+};
+
+template<>
+struct Message<TRADE>: Common {
+    static void process(const Trade &data, int channel) { processTrade(data); }
+};
+
+template<std::size_t MT, typename = void>
+struct MessageProcessor_impl {
+    static void execute(const void *data, int channel) {}
+};
+
+template<typename...> using void_t = void;
+
+template<std::size_t MT>
+struct MessageProcessor_impl<MT, void_t<decltype(Message<MT>::process)>> {
+    static void execute(const void *data, int channel) {
+        Message<MT>::process(*reinterpret_cast<const Message<MT> *>(data), channel);
+    }
+};
+
+template<std::size_t MT>
+struct MessageProcessor: MessageProcessor_impl<MT> {};
+
+void process(const void *data, std::size_t id) {
+    meta::SwitchInstantiator<
+        MessageProcessor, INVALID, void(const void *, int)
+    >::execute(data, 7, id);
+}
+```
+
+Clang will generate
+
+```c++
+process(void const*, unsigned long): # @process(void const*, unsigned long)
+  cmp rsi, 5
+  jae .LBB0_2
+  ret
+.LBB0_2:
+  jmp processTrade(Message<5ul> const&) # TAILCALL
+```
+
+That is, the fact the channel is 7 was used when inlining the case of `INCREMENTAL`.
+
+It seems the [library Petra](https://github.com/jacquelinekay/petra) which also allows a component for building jump tables at compilation time, [uses the nested switch](https://github.com/jacquelinekay/petra/blob/eeab467239c95544ae1576bfe1fbb91a10db1ae0/include/petra/switch_table.hpp#L19) implementation choice.
