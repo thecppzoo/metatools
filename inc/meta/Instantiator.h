@@ -34,4 +34,41 @@ private:
     }
 };
 
+template<
+    template<std::size_t> class UserTemplate,
+    std::size_t Size,
+    typename Signature
+>
+struct SwitchInstantiator;
+
+template<
+    template<std::size_t> class UserTemplate,
+    std::size_t Size,
+    typename Return,
+    typename... Args
+>
+struct SwitchInstantiator<UserTemplate, Size, Return(Args...)> {
+    static Return execute(Args... args, std::size_t index) {
+        return doer<0>(std::forward<Args>(args)..., index);
+    }
+
+private:
+    template<std::size_t Ndx>
+    static std::enable_if_t<Ndx < Size - 1, Return>
+    doer(Args... args, std::size_t index) {
+        switch(index) {
+            case Ndx:
+                return UserTemplate<Ndx>::execute(std::forward<Args>(args)...);
+            default:
+                doer<Ndx + 1>(std::forward<Args>(args)..., index);
+        }
+    }
+
+    template<std::size_t Ndx>
+    static std::enable_if_t<Ndx == Size - 1, Return>
+    doer(Args... args, std::size_t) {
+        return UserTemplate<Ndx>::execute(std::forward<Args>(args)...);
+    }
+};
+
 }
