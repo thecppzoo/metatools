@@ -1,5 +1,10 @@
+#ifndef ZOO_META_INSTANTIATOR
+#define ZOO_META_INSTANTIATOR
+
+#ifndef SIMPLIFY_PREPROCESSING
 #include <utility>
 #include <array>
+#endif
 
 namespace meta {
 
@@ -30,7 +35,7 @@ private:
     template<std::size_t... Indices>
     constexpr static std::array<signature_t, Size>
     makeJumpTable(std::index_sequence<Indices...>) {
-        return { UserTemplate<Indices>::execute... };
+        return {{ UserTemplate<Indices>::execute... }};
     }
 };
 
@@ -72,3 +77,6 @@ private:
 };
 
 }
+
+#endif
+

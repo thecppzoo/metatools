@@ -1,8 +1,11 @@
 #ifndef ZOO_META_TYPE_AT_INDEX
 #define ZOO_META_TYPE_AT_INDEX
 
-#include <meta/Pack.h>
+#ifndef SIMPLIFY_PREPROCESSING
 #include <cstddef>
+#endif
+
+#include <meta/Pack.h>
 
 namespace meta {
 namespace detail {
